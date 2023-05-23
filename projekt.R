@@ -9,7 +9,7 @@ str(data)
 summary(data)
 sum(is.null(data))
 # drop latitude and longitude
-data1 <- subset(data, select=-c(longitude,latitude))
+data1 <- subset(data, select = -c(longitude, latitude))
 # mieszanie danych
 shuffled_data <- data1[sample(1:nrow(data1)),]
 # histogram zmiennej wyjściowej
@@ -26,16 +26,19 @@ m.rpart <- rpart(median_house_value~., data=data_train)
 p.rpart <- predict(m.rpart, data_test)
 
 # TODO: może zaimplementujemy MSE?
-MAE <- function(actual, predicted){
-  mean(abs(actual - predicted))
+RMSE <- function(actual, predicted){
+  sqrt(mean((actual - predicted) ** 2))
 }
 
-MAE(p.rpart, data_test$median_house_value)
+RMSE(p.rpart, data_test$median_house_value)
 # dużo!
 
-MAE(mean(data_train$median_house_value), data_test$median_house_value)
+RMSE(mean(data_train$median_house_value), data_test$median_house_value)
 # ale lepiej niż branie stale średniej
 
 # DOPRACOWANIE MODELU
 # TODO: ensemble learning- drzewo modeli
 library(Cubist)
+m.cubist <- cubist(data_train[-7], data_train$median_house_value)
+p.cubist <- predict(m.cubist, data_test)
+RMSE(data_test$median_house_value, p.cubist)
