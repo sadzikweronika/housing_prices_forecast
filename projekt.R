@@ -5,7 +5,8 @@ data <- read.csv("/Users/aniamarjankowska/Documents/studies/II\ DEGREE/VIII/WdAD
 
 
 # EKSPLORACJA I PRZYGOTOWANIE DANYCH
-# sprawdzenie poprawnośUzupci danych
+# sprawdzenie struktury i poprawności danych
+# oraz detekcja wartosci NaN
 str(data)
 summary(data)
 sapply(data, function(x) sum(is.na(x)))
@@ -16,11 +17,11 @@ nrow(data)
 data <- na.omit(data)
 nrow(data)
 
-# drop latitude and longitude
+# usuwamy cechy latitude and longitude, ponieważ nie mają one 
+# wpływu na cenę mieszkań
 data1 <- subset(data, select = -c(longitude, latitude))
 
-
-# one-hot encoding dla zmiennej kategorycznej
+# one-hot encoding dla zmiennej kategorycznej ocean_proximity
 library(mltools)
 library(data.table)
 unique(data$ocean_proximity)
@@ -38,7 +39,8 @@ shuffled_data <- data1[sample(1:nrow(data1)),]
 summary(shuffled_data$median_house_value)
 
 # histogram zmiennej wyjściowej
-hist(shuffled_data$median_house_value, breaks = "Sturges", xlab = "Median House Value", main = "Histogram zmiennej wyjściowej")
+hist(shuffled_data$median_house_value, breaks = "Sturges", xlab = "Median House Value", 
+     main = "Histogram zmiennej wyjściowej", xlim = range(0, 580000))
 
 # detekcja outlierów metodą Z-score
 zscore_cols <- names(shuffled_data)[-(7:12)]
@@ -48,11 +50,10 @@ for(col in zscore_cols){
   print(paste(col, nrow(shuffled_data[which(z_scores > 2 | z_scores < -2),])))
 }
 
-# box ploty zmiennych objaścniających
+# box ploty zmiennych objaśniających
 # oraz detekcja outlierów za pomocą metody IQR
 box_cols <- names(shuffled_data)[-(7:12)]
 View(shuffled_data)
-# shuffled_data <- data.frame(shuffled_data)
 for(col in box_cols){
   boxplot(shuffled_data[,col], main = paste("Box plot zmiennej", col))
   iqr <- unname(quantile(shuffled_data[,col], .75) - quantile(shuffled_data[,col], .25))
@@ -61,11 +62,12 @@ for(col in box_cols){
   print(paste(col, nrow(shuffled_data[which(shuffled_data[,col] > ul | shuffled_data[,col] < ll),])))
 }
 
-# widzimy, że jest dużoo outlieróww jeżeli rozdzielimy dane na dane jednowymiarowe, 
-# musimy to sprawdzić, ale użyjemy odległości Mahalanobisa do wykrywania takowych,
+# widzimy, że jest dużo outlieróww jeżeli rozdzielimy dane na dane jednowymiarowe, 
+# musimy to sprawdzić. Użyjemy więc odległości Mahalanobisa do wykrywania takowych,
 # ponieważ mamy tutaj do czynienia z danymi wielowymiarowymi
-x_data <- shuffled_data[, -7]
 x_data <- shuffled_data[, -c(7:12)]
+
+# wyznaczanie ogległości Mahalonobisa dla każdej z obserwacji
 centroid <- unname(sapply(x_data,FUN=mean))
 mahalonobis_dist <- t(matrix(as.numeric()))
 distances <- c()
@@ -79,15 +81,24 @@ for (x in 1:20433) {
   distances <- c(distances, mahalonobis_dist)
 }
 distances
+
+# zakładamy, że 10% obserwacji to wartości odstające
 distances > quantile(distances, .9)
 x_data[distances <= quantile(distances, .9),]
 nrow(x_data[distances <= quantile(distances, .9),])
 
 row(shuffled_data)
 
+# skalowanie zmiennych w naszym projekcie nie jest potrzebne,
+# ponieważ używamy wyłącznie modeli opartych na 
+# strukturach drzewiastych, które nie wymagają w takiej formie
+# przeskalowanych zmiennych, gdyż nie wykorzystują w żadnym sensie
+# pojęcia metryki
+
+# podział danych
 # 80% - train, 20% - test
 data_train <- shuffled_data[1:16512, ]
-data_test <- shuffled_data[16513:20350, ]
+data_test <- shuffled_data[16513:20433, ]
 
 
 # BUDOWA MODELU
@@ -98,7 +109,10 @@ p.rpart <- predict(m.rpart, data_test)
 
 summary(p.rpart)
 
-# TODO: może zaimplementujemy MSE?
+# implementacja trzech metryk do oceny modelu
+# RMSE - root mean squared error
+# MAE - mean absolute error
+# MSE - mean squared error
 RMSE <- function(actual, predicted){
   sqrt(mean((actual - predicted) ** 2))
 }
@@ -111,27 +125,49 @@ MSE <- function(actual, predicted){
   mean((actual-predicted)**2)
 }
 
-data_test$median_house_value
+# wyznaczenie współczynnika korelacji między prognozami modelu
+# a zmienną objaśnianą ze zbioru testowego
+# oraz wartości metryk zaimplementowanych powyżej
+cor(p.rpart, data_test$median_house_value)
+
 MAE(p.rpart, data_test$median_house_value)
 
-mean(data_test$median_house_value)
-MAE(206594, data_test$median_house_value)
-
 RMSE(p.rpart, data_test$median_house_value)
-# dużo!
 
 MSE(p.rpart, data_test$median_house_value)
 
-RMSE(mean(data_train$median_house_value), data_test$median_house_value)
-# ale lepiej niż branie stale średniej
+# wyznaczenie MAE dla wartości objaśnianej w zbiorze testowym oraz
+# średniej wartości zmiennej objaśnianej ze zbioru testowego
 
+RMSE(mean(data_train$median_house_value), data_test$median_house_value)
+# model zachowuje się lepiej niż modelowanie wartości objaśnianej 
+# wartością średnią ze zmiennej wyjściowej
+
+# wizualizacja drzewa regresyjnego
 library(rpart.plot)
 rpart.plot(m.rpart, digits = 3)
 
 
 # DOPRACOWANIE MODELU
-# TODO: ensemble learning- drzewo modeli
+# drzewo modeli
 library(Cubist)
+
+# model
 m.cubist <- cubist(data_train[-7], data_train$median_house_value)
+
+# predykcje
 p.cubist <- predict(m.cubist, data_test)
+
+# wyznaczenie współczynnika korelacji między prognozami modelu
+# a zmienną objaśnianą ze zbioru testowego
+cor(p.cubist, data_test$median_house_value)
+
+# wyznaczenie wartości metryki RMSE dla prognoz modelu
+# oraz zmienną objaśnianą ze zbioru testowego
 RMSE(data_test$median_house_value, p.cubist)
+
+# podstawowe statystyki prognoz
+m.cubist
+summary(m.cubist)
+
+# najmniejszy błąd na zbiorze testowym otrzymujemy dla drzewa modeli
