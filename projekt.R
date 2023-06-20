@@ -1,7 +1,7 @@
 # ZBIERANIE DANYCH
 # Źródło: https://www.kaggle.com/datasets/camnugent/california-housing-prices
 # wczytywanie danych
-data <- read.csv("/Users/aniamarjankowska/Documents/studies/II\ DEGREE/VIII/WdAD/project/housing.csv", stringsAsFactors = FALSE)
+data <- read.csv("/Users/weronikasadzik/Downloads/housing.csv", stringsAsFactors = FALSE)
 
 
 # EKSPLORACJA I PRZYGOTOWANIE DANYCH
@@ -35,6 +35,7 @@ round(res, 2)
 heatmap(x = res, symm = TRUE)
 
 # mieszanie danych
+set.seed(420)
 shuffled_data <- data1[sample(1:nrow(data1)),]
 summary(shuffled_data$median_house_value)
 
@@ -136,7 +137,7 @@ RMSE(p.rpart, data_test$median_house_value)
 
 MSE(p.rpart, data_test$median_house_value)
 
-# wyznaczenie MAE dla wartości objaśnianej w zbiorze testowym oraz
+# wyznaczenie RMSE dla wartości objaśnianej w zbiorze testowym oraz
 # średniej wartości zmiennej objaśnianej ze zbioru testowego
 
 RMSE(mean(data_train$median_house_value), data_test$median_house_value)
